@@ -153,7 +153,7 @@ export class Solver {
 	 * @param {Number} strength Strength, should be less than `Strength.required`
 	 */
 	public addEditVariable(variable: Variable, strength: number): void {
-		let editPair = this._editMap.find(variable)
+		let editPair = this._editMap.get(variable)
 		if (editPair !== undefined) {
 			throw new Error('duplicate edit variable')
 		}
@@ -166,7 +166,7 @@ export class Solver {
 		this.addConstraint(cn)
 		let tag = this._cnMap.get(cn)
 		let info = {tag, constraint: cn, constant: 0.0}
-		this._editMap.insert(variable, info)
+		this._editMap.set(variable, info)
 	}
 
 	/**
@@ -175,11 +175,12 @@ export class Solver {
 	 * @param {Variable} variable Edit variable to remove from the solver
 	 */
 	public removeEditVariable(variable: Variable): void {
-		let editPair = this._editMap.erase(variable)
-		if (editPair === undefined) {
+		let editInfo = this._editMap.get(variable)
+		if (editInfo === undefined) {
 			throw new Error('unknown edit variable')
 		}
-		this.removeConstraint(editPair.second.constraint)
+		this._editMap.delete(variable)
+		this.removeConstraint(editInfo.constraint)
 	}
 
 	/**
@@ -189,7 +190,7 @@ export class Solver {
 	 * @return {Bool} true or false
 	 */
 	public hasEditVariable(variable: Variable): boolean {
-		return this._editMap.contains(variable)
+		return this._editMap.has(variable)
 	}
 
 	/**
@@ -199,13 +200,12 @@ export class Solver {
 	 * @param {Number} value Suggested value
 	 */
 	public suggestValue(variable: Variable, value: number): void {
-		let editPair = this._editMap.find(variable)
-		if (editPair === undefined) {
+		let info = this._editMap.get(variable)
+		if (info === undefined) {
 			throw new Error('unknown edit variable')
 		}
 
 		let rows = this._rowMap
-		let info = editPair.second
 		let delta = value - info.constant
 		info.constant = value
 
@@ -718,7 +718,7 @@ export class Solver {
 	private _cnMap: Map<Constraint, ITag> = new Map()
 	private _rowMap: Map<Symbol, Row> = new Map()
 	private _varMap: Map<Variable, Symbol> = new Map()
-	private _editMap = createEditMap()
+	private _editMap: Map<Variable, IEditInfo> = new Map()
 	private _infeasibleRows: Symbol[] = []
 	private _objective: Row = new Row()
 	private _artificial: Row = null
@@ -757,22 +757,6 @@ interface IEditInfo {
 interface IRowCreation {
 	row: Row
 	tag: ITag
-}
-
-/**
- * An internal function for creating a variable map.
- * @private
- */
-function createVarMap(): IMap<Variable, Symbol> {
-	return createMap<Variable, Symbol>()
-}
-
-/**
- * An internal function for creating an edit map.
- * @private
- */
-function createEditMap(): IMap<Variable, IEditInfo> {
-	return createMap<Variable, IEditInfo>()
 }
 
 /**

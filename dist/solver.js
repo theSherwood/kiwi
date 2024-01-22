@@ -134,7 +134,7 @@ export class Solver {
      * @param {Number} strength Strength, should be less than `Strength.required`
      */
     addEditVariable(variable, strength) {
-        let editPair = this._editMap.find(variable);
+        let editPair = this._editMap.get(variable);
         if (editPair !== undefined) {
             throw new Error('duplicate edit variable');
         }
@@ -147,7 +147,7 @@ export class Solver {
         this.addConstraint(cn);
         let tag = this._cnMap.get(cn);
         let info = { tag, constraint: cn, constant: 0.0 };
-        this._editMap.insert(variable, info);
+        this._editMap.set(variable, info);
     }
     /**
      * Remove an edit variable from the solver.
@@ -155,11 +155,12 @@ export class Solver {
      * @param {Variable} variable Edit variable to remove from the solver
      */
     removeEditVariable(variable) {
-        let editPair = this._editMap.erase(variable);
-        if (editPair === undefined) {
+        let editInfo = this._editMap.get(variable);
+        if (editInfo === undefined) {
             throw new Error('unknown edit variable');
         }
-        this.removeConstraint(editPair.second.constraint);
+        this._editMap.delete(variable);
+        this.removeConstraint(editInfo.constraint);
     }
     /**
      * Test whether the solver contains the edit variable.
@@ -168,7 +169,7 @@ export class Solver {
      * @return {Bool} true or false
      */
     hasEditVariable(variable) {
-        return this._editMap.contains(variable);
+        return this._editMap.has(variable);
     }
     /**
      * Suggest the value of an edit variable.
@@ -177,12 +178,11 @@ export class Solver {
      * @param {Number} value Suggested value
      */
     suggestValue(variable, value) {
-        let editPair = this._editMap.find(variable);
-        if (editPair === undefined) {
+        let info = this._editMap.get(variable);
+        if (info === undefined) {
             throw new Error('unknown edit variable');
         }
         let rows = this._rowMap;
-        let info = editPair.second;
         let delta = value - info.constant;
         info.constant = value;
         // Check first if the positive error variable is basic.
@@ -672,7 +672,7 @@ export class Solver {
     _cnMap = new Map();
     _rowMap = new Map();
     _varMap = new Map();
-    _editMap = createEditMap();
+    _editMap = new Map();
     _infeasibleRows = [];
     _objective = new Row();
     _artificial = null;
@@ -685,20 +685,6 @@ export class Solver {
 function nearZero(value) {
     let eps = 1.0e-8;
     return value < 0.0 ? -value < eps : value < eps;
-}
-/**
- * An internal function for creating a variable map.
- * @private
- */
-function createVarMap() {
-    return createMap();
-}
-/**
- * An internal function for creating an edit map.
- * @private
- */
-function createEditMap() {
-    return createMap();
 }
 /**
  * An enum defining the available symbol types.
