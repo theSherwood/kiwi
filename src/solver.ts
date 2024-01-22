@@ -245,17 +245,15 @@ export class Solver {
 	 * Update the values of the variables.
 	 */
 	public updateVariables(): void {
-		let vars = this._varMap
 		let rows = this._rowMap
-		for (let i = 0, n = vars.size(); i < n; ++i) {
-			let pair = vars.itemAt(i)
-			let basicRow = rows.get(pair.second)
+		this._varMap.forEach((sym, variable) => {
+			let basicRow = rows.get(sym)
 			if (basicRow !== undefined) {
-				pair.first.setValue(basicRow.constant())
+				variable.setValue(basicRow.constant())
 			} else {
-				pair.first.setValue(0.0)
+				variable.setValue(0.0)
 			}
-		}
+		})
 	}
 
 	/**
@@ -265,8 +263,12 @@ export class Solver {
 	 * @private
 	 */
 	private _getVarSymbol(variable: Variable): Symbol {
-		let factory = () => this._makeSymbol(SymbolType.External)
-		return this._varMap.setDefault(variable, factory).second
+		let sym = this._varMap.get(variable)
+		if (!sym) {
+			sym = this._makeSymbol(SymbolType.External)
+			this._varMap.set(variable, sym)
+		}
+		return sym
 	}
 
 	/**
@@ -715,7 +717,7 @@ export class Solver {
 
 	private _cnMap: Map<Constraint, ITag> = new Map()
 	private _rowMap: Map<Symbol, Row> = new Map()
-	private _varMap = createVarMap()
+	private _varMap: Map<Variable, Symbol> = new Map()
 	private _editMap = createEditMap()
 	private _infeasibleRows: Symbol[] = []
 	private _objective: Row = new Row()
@@ -755,22 +757,6 @@ interface IEditInfo {
 interface IRowCreation {
 	row: Row
 	tag: ITag
-}
-
-/**
- * An internal function for creating a constraint map.
- * @private
- */
-function createCnMap(): IMap<Constraint, ITag> {
-	return createMap<Constraint, ITag>()
-}
-
-/**
- * An internal function for creating a row map.
- * @private
- */
-function createRowMap(): IMap<Symbol, Row> {
-	return createMap<Symbol, Row>()
 }
 
 /**

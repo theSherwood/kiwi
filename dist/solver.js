@@ -218,18 +218,16 @@ export class Solver {
      * Update the values of the variables.
      */
     updateVariables() {
-        let vars = this._varMap;
         let rows = this._rowMap;
-        for (let i = 0, n = vars.size(); i < n; ++i) {
-            let pair = vars.itemAt(i);
-            let basicRow = rows.get(pair.second);
+        this._varMap.forEach((sym, variable) => {
+            let basicRow = rows.get(sym);
             if (basicRow !== undefined) {
-                pair.first.setValue(basicRow.constant());
+                variable.setValue(basicRow.constant());
             }
             else {
-                pair.first.setValue(0.0);
+                variable.setValue(0.0);
             }
-        }
+        });
     }
     /**
      * Get the symbol for the given variable.
@@ -238,8 +236,12 @@ export class Solver {
      * @private
      */
     _getVarSymbol(variable) {
-        let factory = () => this._makeSymbol(SymbolType.External);
-        return this._varMap.setDefault(variable, factory).second;
+        let sym = this._varMap.get(variable);
+        if (!sym) {
+            sym = this._makeSymbol(SymbolType.External);
+            this._varMap.set(variable, sym);
+        }
+        return sym;
     }
     /**
      * Create a new Row object for the given constraint.
@@ -669,7 +671,7 @@ export class Solver {
     }
     _cnMap = new Map();
     _rowMap = new Map();
-    _varMap = createVarMap();
+    _varMap = new Map();
     _editMap = createEditMap();
     _infeasibleRows = [];
     _objective = new Row();
@@ -683,20 +685,6 @@ export class Solver {
 function nearZero(value) {
     let eps = 1.0e-8;
     return value < 0.0 ? -value < eps : value < eps;
-}
-/**
- * An internal function for creating a constraint map.
- * @private
- */
-function createCnMap() {
-    return createMap();
-}
-/**
- * An internal function for creating a row map.
- * @private
- */
-function createRowMap() {
-    return createMap();
 }
 /**
  * An internal function for creating a variable map.
