@@ -36,8 +36,8 @@ export class Solver {
      * @param {Constraint} constraint Constraint to add to the solver
      */
     addConstraint(constraint) {
-        let cnPair = this._cnMap.find(constraint);
-        if (cnPair !== undefined) {
+        let existingTag = this._cnMap.get(constraint);
+        if (existingTag !== undefined) {
             throw new Error('duplicate constraint');
         }
         // Creating a row causes symbols to be reserved for the variables
@@ -75,9 +75,9 @@ export class Solver {
         else {
             row.solveFor(subject);
             this._substitute(subject, row);
-            this._rowMap.insert(subject, row);
+            this._rowMap.set(subject, row);
         }
-        this._cnMap.insert(constraint, tag);
+        this._cnMap.set(constraint, tag);
         // Optimizing after each constraint is added performs less
         // aggregate work due to a smaller average system size. It
         // also ensures the solver remains in a consistent state.
@@ -89,27 +89,30 @@ export class Solver {
      * @param {Constraint} constraint Constraint to remove from the solver
      */
     removeConstraint(constraint) {
-        let cnPair = this._cnMap.erase(constraint);
-        if (cnPair === undefined) {
+        let tag = this._cnMap.get(constraint);
+        if (tag === undefined) {
             throw new Error('unknown constraint');
         }
+        this._cnMap.delete(constraint);
         // Remove the error effects from the objective function
         // *before* pivoting, or substitutions into the objective
         // will lead to incorrect solver results.
-        this._removeConstraintEffects(constraint, cnPair.second);
+        this._removeConstraintEffects(constraint, tag);
         // If the marker is basic, simply drop the row. Otherwise,
         // pivot the marker into the basis and then drop the row.
-        let marker = cnPair.second.marker;
-        let rowPair = this._rowMap.erase(marker);
-        if (rowPair === undefined) {
+        let marker = tag.marker;
+        let row = this._rowMap.get(marker);
+        if (row === undefined) {
             let leaving = this._getMarkerLeavingSymbol(marker);
             if (leaving.type() === SymbolType.Invalid) {
                 throw new Error('failed to find leaving row');
             }
-            rowPair = this._rowMap.erase(leaving);
-            rowPair.second.solveForEx(leaving, marker);
-            this._substitute(marker, rowPair.second);
+            row = this._rowMap.get(leaving);
+            this._rowMap.delete(leaving);
+            row.solveForEx(leaving, marker);
+            this._substitute(marker, row);
         }
+        this._rowMap.delete(marker);
         // Optimizing after each constraint is removed ensures that the
         // solver remains consistent. It makes the solver api easier to
         // use at a small tradeoff for speed.
@@ -122,7 +125,7 @@ export class Solver {
      * @return {Bool} true or false
      */
     hasConstraint(constraint) {
-        return this._cnMap.contains(constraint);
+        return this._cnMap.has(constraint);
     }
     /**
      * Add an edit variable to the solver.
@@ -142,7 +145,7 @@ export class Solver {
         let expr = new Expression(variable);
         let cn = new Constraint(expr, Operator.Eq, undefined, strength);
         this.addConstraint(cn);
-        let tag = this._cnMap.find(cn).second;
+        let tag = this._cnMap.get(cn);
         let info = { tag, constraint: cn, constant: 0.0 };
         this._editMap.insert(variable, info);
     }
@@ -184,9 +187,9 @@ export class Solver {
         info.constant = value;
         // Check first if the positive error variable is basic.
         let marker = info.tag.marker;
-        let rowPair = rows.find(marker);
-        if (rowPair !== undefined) {
-            if (rowPair.second.add(-delta) < 0.0) {
+        let row = rows.get(marker);
+        if (row !== undefined) {
+            if (row.add(-delta) < 0.0) {
                 this._infeasibleRows.push(marker);
             }
             this._dualOptimize();
@@ -194,23 +197,21 @@ export class Solver {
         }
         // Check next if the negative error variable is basic.
         let other = info.tag.other;
-        rowPair = rows.find(other);
-        if (rowPair !== undefined) {
-            if (rowPair.second.add(delta) < 0.0) {
+        row = rows.get(other);
+        if (row !== undefined) {
+            if (row.add(delta) < 0.0) {
                 this._infeasibleRows.push(other);
             }
             this._dualOptimize();
             return;
         }
         // Otherwise update each row where the error variables exist.
-        for (let i = 0, n = rows.size(); i < n; ++i) {
-            let rowPair = rows.itemAt(i);
-            let row = rowPair.second;
+        rows.forEach((row, sym) => {
             let coeff = row.coefficientFor(marker);
-            if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && rowPair.first.type() !== SymbolType.External) {
-                this._infeasibleRows.push(rowPair.first);
+            if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && sym.type() !== SymbolType.External) {
+                this._infeasibleRows.push(sym);
             }
-        }
+        });
         this._dualOptimize();
     }
     /**
@@ -221,9 +222,9 @@ export class Solver {
         let rows = this._rowMap;
         for (let i = 0, n = vars.size(); i < n; ++i) {
             let pair = vars.itemAt(i);
-            let rowPair = rows.find(pair.second);
-            if (rowPair !== undefined) {
-                pair.first.setValue(rowPair.second.constant());
+            let basicRow = rows.get(pair.second);
+            if (basicRow !== undefined) {
+                pair.first.setValue(basicRow.constant());
             }
             else {
                 pair.first.setValue(0.0);
@@ -266,9 +267,9 @@ export class Solver {
             let termPair = terms.itemAt(i);
             if (!nearZero(termPair.second)) {
                 let symbol = this._getVarSymbol(termPair.first);
-                let basicPair = this._rowMap.find(symbol);
-                if (basicPair !== undefined) {
-                    row.insertRow(basicPair.second, termPair.second);
+                let basicRow = this._rowMap.get(symbol);
+                if (basicRow !== undefined) {
+                    row.insertRow(basicRow, termPair.second);
                 }
                 else {
                     row.insertSymbol(symbol, termPair.second);
@@ -367,7 +368,7 @@ export class Solver {
     _addWithArtificialVariable(row) {
         // Create and add the artificial variable to the tableau.
         let art = this._makeSymbol(SymbolType.Slack);
-        this._rowMap.insert(art, row.copy());
+        this._rowMap.set(art, row.copy());
         this._artificial = row.copy();
         // Optimize the artificial objective. This is successful
         // only if the artificial objective is optimized to zero.
@@ -376,9 +377,9 @@ export class Solver {
         this._artificial = null;
         // If the artificial variable is basic, pivot the row so that
         // it becomes non-basic. If the row is constant, exit early.
-        let pair = this._rowMap.erase(art);
-        if (pair !== undefined) {
-            let basicRow = pair.second;
+        let basicRow = this._rowMap.get(art);
+        this._rowMap.delete(art);
+        if (basicRow !== undefined) {
             if (basicRow.isConstant()) {
                 return success;
             }
@@ -388,13 +389,12 @@ export class Solver {
             }
             basicRow.solveForEx(art, entering);
             this._substitute(entering, basicRow);
-            this._rowMap.insert(entering, basicRow);
+            this._rowMap.set(entering, basicRow);
         }
         // Remove the artificial variable from the tableau.
-        let rows = this._rowMap;
-        for (let i = 0, n = rows.size(); i < n; ++i) {
-            rows.itemAt(i).second.removeSymbol(art);
-        }
+        this._rowMap.forEach(row => {
+            row.removeSymbol(art);
+        });
         this._objective.removeSymbol(art);
         return success;
     }
@@ -407,14 +407,12 @@ export class Solver {
      * @private
      */
     _substitute(symbol, row) {
-        let rows = this._rowMap;
-        for (let i = 0, n = rows.size(); i < n; ++i) {
-            let pair = rows.itemAt(i);
-            pair.second.substitute(symbol, row);
-            if (pair.second.constant() < 0.0 && pair.first.type() !== SymbolType.External) {
-                this._infeasibleRows.push(pair.first);
+        this._rowMap.forEach((basicRow, sym) => {
+            basicRow.substitute(symbol, row);
+            if (basicRow.constant() < 0.0 && sym.type() !== SymbolType.External) {
+                this._infeasibleRows.push(sym);
             }
-        }
+        });
         this._objective.substitute(symbol, row);
         if (this._artificial) {
             this._artificial.substitute(symbol, row);
@@ -440,10 +438,11 @@ export class Solver {
                 throw new Error('the objective is unbounded');
             }
             // pivot the entering symbol into the basis
-            let row = this._rowMap.erase(leaving).second;
+            let row = this._rowMap.get(leaving);
+            this._rowMap.delete(leaving);
             row.solveForEx(leaving, entering);
             this._substitute(entering, row);
-            this._rowMap.insert(entering, row);
+            this._rowMap.set(entering, row);
             iterations++;
         }
         throw new Error('solver iterations exceeded');
@@ -463,18 +462,17 @@ export class Solver {
         let infeasible = this._infeasibleRows;
         while (infeasible.length !== 0) {
             let leaving = infeasible.pop();
-            let pair = rows.find(leaving);
-            if (pair !== undefined && pair.second.constant() < 0.0) {
-                let entering = this._getDualEnteringSymbol(pair.second);
+            let row = rows.get(leaving);
+            if (row !== undefined && row.constant() < 0.0) {
+                let entering = this._getDualEnteringSymbol(row);
                 if (entering.type() === SymbolType.Invalid) {
                     throw new Error('dual optimize failed');
                 }
                 // pivot the entering symbol into the basis
-                let row = pair.second;
-                rows.erase(leaving);
+                rows.delete(leaving);
                 row.solveForEx(leaving, entering);
                 this._substitute(entering, row);
-                rows.insert(entering, row);
+                rows.set(entering, row);
             }
         }
     }
@@ -542,12 +540,8 @@ export class Solver {
     _getLeavingSymbol(entering) {
         let ratio = Number.MAX_VALUE;
         let found = INVALID_SYMBOL;
-        let rows = this._rowMap;
-        for (let i = 0, n = rows.size(); i < n; ++i) {
-            let pair = rows.itemAt(i);
-            let symbol = pair.first;
+        this._rowMap.forEach((row, symbol) => {
             if (symbol.type() !== SymbolType.External) {
-                let row = pair.second;
                 let temp = row.coefficientFor(entering);
                 if (temp < 0.0) {
                     let temp_ratio = -row.constant() / temp;
@@ -557,7 +551,7 @@ export class Solver {
                     }
                 }
             }
-        }
+        });
         return found;
     }
     /**
@@ -589,15 +583,11 @@ export class Solver {
         let first = invalid;
         let second = invalid;
         let third = invalid;
-        let rows = this._rowMap;
-        for (let i = 0, n = rows.size(); i < n; ++i) {
-            let pair = rows.itemAt(i);
-            let row = pair.second;
+        this._rowMap.forEach((row, symbol) => {
             let c = row.coefficientFor(marker);
             if (c === 0.0) {
-                continue;
+                return;
             }
-            let symbol = pair.first;
             if (symbol.type() === SymbolType.External) {
                 third = symbol;
             }
@@ -615,7 +605,7 @@ export class Solver {
                     second = symbol;
                 }
             }
-        }
+        });
         if (first !== invalid) {
             return first;
         }
@@ -643,9 +633,9 @@ export class Solver {
      * @private
      */
     _removeMarkerEffects(marker, strength) {
-        let pair = this._rowMap.find(marker);
-        if (pair !== undefined) {
-            this._objective.insertRow(pair.second, -strength);
+        let row = this._rowMap.get(marker);
+        if (row !== undefined) {
+            this._objective.insertRow(row, -strength);
         }
         else {
             this._objective.insertSymbol(marker, -strength);
@@ -677,8 +667,8 @@ export class Solver {
     _makeSymbol(type) {
         return new Symbol(type, this._idTick++);
     }
-    _cnMap = createCnMap();
-    _rowMap = createRowMap();
+    _cnMap = new Map();
+    _rowMap = new Map();
     _varMap = createVarMap();
     _editMap = createEditMap();
     _infeasibleRows = [];
