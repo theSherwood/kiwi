@@ -1,4 +1,3 @@
-import {createMap, IMap} from './maptype.js'
 import {Variable} from './variable.js'
 
 /**
@@ -30,7 +29,7 @@ export class Expression {
 	 * This *must* be treated as const.
 	 * @private
 	 */
-	public terms(): IMap<Variable, number> {
+	public terms(): Map<Variable, number> {
 		return this._terms
 	}
 
@@ -50,10 +49,9 @@ export class Expression {
 	 */
 	public value(): number {
 		let result = this._constant
-		for (let i = 0, n = this._terms.size(); i < n; i++) {
-			let pair = this._terms.itemAt(i)
-			result += pair.first.value() * pair.second
-		}
+		this._terms.forEach((num, variable) => {
+			result += variable.value() * num
+		})
 		return result
 	}
 
@@ -100,15 +98,15 @@ export class Expression {
 	}
 
 	public isConstant(): boolean {
-		return this._terms.size() == 0
+		return this._terms.size == 0
 	}
 
 	public toString(): string {
-		let result = this._terms.array
-			.map(function (pair) {
-				return pair.second + '*' + pair.first.toString()
-			})
-			.join(' + ')
+		let arr: string[] = []
+		this._terms.forEach((num, variable) => {
+			arr.push(num + '*' + variable.toString())
+		})
+		let result = arr.join(' + ')
 
 		if (!this.isConstant() && this._constant !== 0) {
 			result += ' + '
@@ -119,7 +117,7 @@ export class Expression {
 		return result
 	}
 
-	private _terms: IMap<Variable, number>
+	private _terms: Map<Variable, number>
 	private _constant: number
 }
 
@@ -127,7 +125,7 @@ export class Expression {
  * An internal interface for the argument parse results.
  */
 interface IParseResult {
-	terms: IMap<Variable, number>
+	terms: Map<Variable, number>
 	constant: number
 }
 
@@ -138,20 +136,20 @@ interface IParseResult {
 function parseArgs(args: IArguments): IParseResult {
 	let constant = 0.0
 	let factory = () => 0.0
-	let terms = createMap<Variable, number>()
+	let terms: Map<Variable, number> = new Map()
 	for (let i = 0, n = args.length; i < n; ++i) {
 		let item = args[i]
 		if (typeof item === 'number') {
 			constant += item
 		} else if (item instanceof Variable) {
-			terms.setDefault(item, factory).second += 1.0
+			let n = terms.get(item) || 0.0
+			terms.set(item, n + 1.0)
 		} else if (item instanceof Expression) {
 			constant += item.constant()
 			let terms2 = item.terms()
-			for (let j = 0, k = terms2.size(); j < k; j++) {
-				let termPair = terms2.itemAt(j)
-				terms.setDefault(termPair.first, factory).second += termPair.second
-			}
+			terms2.forEach((num, variable) => {
+				terms.set(variable, (terms.get(variable) || 0.0) + num)
+			})
 		} else if (item instanceof Array) {
 			if (item.length !== 2) {
 				throw new Error('array must have length 2')
@@ -162,14 +160,14 @@ function parseArgs(args: IArguments): IParseResult {
 				throw new Error('array item 0 must be a number')
 			}
 			if (value2 instanceof Variable) {
-				terms.setDefault(value2, factory).second += value
+				let n = terms.get(value2) || 0.0
+				terms.set(value2, n + value)
 			} else if (value2 instanceof Expression) {
 				constant += value2.constant() * value
 				let terms2 = value2.terms()
-				for (let j = 0, k = terms2.size(); j < k; j++) {
-					let termPair = terms2.itemAt(j)
-					terms.setDefault(termPair.first, factory).second += termPair.second * value
-				}
+				terms2.forEach((num, variable) => {
+					terms.set(variable, (terms.get(variable) || 0.0) + num * value)
+				})
 			} else {
 				throw new Error('array item 1 must be a variable or expression')
 			}

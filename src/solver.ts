@@ -292,19 +292,17 @@ export class Solver {
 		let row = new Row(expr.constant())
 
 		// Substitute the current basic variables into the row.
-		let terms = expr.terms()
-		for (let i = 0, n = terms.size(); i < n; ++i) {
-			let termPair = terms.itemAt(i)
-			if (!nearZero(termPair.second)) {
-				let symbol = this._getVarSymbol(termPair.first)
+		expr.terms().forEach((num, variable) => {
+			if (!nearZero(num)) {
+				let symbol = this._getVarSymbol(variable)
 				let basicRow = this._rowMap.get(symbol)
 				if (basicRow !== undefined) {
-					row.insertRow(basicRow, termPair.second)
+					row.insertRow(basicRow, num)
 				} else {
-					row.insertSymbol(symbol, termPair.second)
+					row.insertSymbol(symbol, num)
 				}
 			}
-		}
+		})
 
 		// Add the necessary slack, error, and dummy variables.
 		let objective = this._objective

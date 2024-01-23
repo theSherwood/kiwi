@@ -1,4 +1,3 @@
-import { IMap } from './maptype.js';
 import { Variable } from './variable.js';
 /**
  * An expression of variable terms and a constant.
@@ -23,7 +22,7 @@ export declare class Expression {
      * This *must* be treated as const.
      * @private
      */
-    terms(): IMap<Variable, number>;
+    terms(): Map<Variable, number>;
     /**
      * Returns the constant of the expression.
      * @private
