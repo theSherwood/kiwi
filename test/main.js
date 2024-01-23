@@ -36,7 +36,9 @@ describe('import kiwi', function () {
 			})
 			it('solver.suggestValue(variable, 200) => value: 200', function () {
 				solver.suggestValue(variable, 200)
+				console.log('VAR', variable)
 				solver.updateVariables()
+				console.log('VAR2', variable)
 				assert.equal(200, variable.value())
 			})
 			it('solver.removeEditVariable(variable) => solver.hasEditVariable(): false', function () {

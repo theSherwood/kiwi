@@ -1,6 +1,5 @@
 import { Constraint, Operator } from './constraint.js';
 import { Expression } from './expression.js';
-import { createMap } from './maptype.js';
 import { Strength } from './strength.js';
 /**
  * The constraint solver class.
@@ -339,11 +338,9 @@ export class Solver {
      * @private
      */
     _chooseSubject(row, tag) {
-        let cells = row.cells();
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            if (pair.first.type() === SymbolType.External) {
-                return pair.first;
+        for (let sym of row.cells().keys()) {
+            if (sym.type() === SymbolType.External) {
+                return sym;
             }
         }
         let type = tag.marker.type();
@@ -489,12 +486,9 @@ export class Solver {
      * @private
      */
     _getEnteringSymbol(objective) {
-        let cells = objective.cells();
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            let symbol = pair.first;
-            if (pair.second < 0.0 && symbol.type() !== SymbolType.Dummy) {
-                return symbol;
+        for (let [sym, num] of objective.cells().entries()) {
+            if (num < 0.0 && sym.type() !== SymbolType.Dummy) {
+                return sym;
             }
         }
         return INVALID_SYMBOL;
@@ -513,11 +507,7 @@ export class Solver {
     _getDualEnteringSymbol(row) {
         let ratio = Number.MAX_VALUE;
         let entering = INVALID_SYMBOL;
-        let cells = row.cells();
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            let symbol = pair.first;
-            let c = pair.second;
+        row.cells().forEach((c, symbol) => {
             if (c > 0.0 && symbol.type() !== SymbolType.Dummy) {
                 let coeff = this._objective.coefficientFor(symbol);
                 let r = coeff / c;
@@ -526,7 +516,7 @@ export class Solver {
                     entering = symbol;
                 }
             }
-        }
+        });
         return entering;
     }
     /**
@@ -651,12 +641,10 @@ export class Solver {
      * @private
      */
     _anyPivotableSymbol(row) {
-        let cells = row.cells();
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            let type = pair.first.type();
+        for (let [sym, num] of row.cells().entries()) {
+            let type = sym.type();
             if (type === SymbolType.Slack || type === SymbolType.Error) {
-                return pair.first;
+                return sym;
             }
         }
         return INVALID_SYMBOL;
@@ -760,16 +748,14 @@ class Row {
      * Returns true if the row is a constant value.
      */
     isConstant() {
-        return this._cellMap.empty();
+        return this._cellMap.size === 0;
     }
     /**
      * Returns true if the Row has all dummy symbols.
      */
     allDummies() {
-        let cells = this._cellMap;
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            if (pair.first.type() !== SymbolType.Dummy) {
+        for (let [sym] of this._cellMap.entries()) {
+            if (sym.type() !== SymbolType.Dummy) {
                 return false;
             }
         }
@@ -780,7 +766,10 @@ class Row {
      */
     copy() {
         let theCopy = new Row(this._constant);
-        theCopy._cellMap = this._cellMap.copy();
+        theCopy._cellMap = new Map();
+        this._cellMap.forEach((num, sym) => {
+            theCopy._cellMap.set(sym, num);
+        });
         return theCopy;
     }
     /**
@@ -799,9 +788,12 @@ class Row {
      * coefficient is zero, the symbol will be removed from the row.
      */
     insertSymbol(symbol, coefficient = 1.0) {
-        let pair = this._cellMap.setDefault(symbol, () => 0.0);
-        if (nearZero((pair.second += coefficient))) {
-            this._cellMap.erase(symbol);
+        let num = (this._cellMap.get(symbol) || 0.0) + coefficient;
+        if (nearZero(num)) {
+            this._cellMap.delete(symbol);
+        }
+        else {
+            this._cellMap.set(symbol, num);
         }
     }
     /**
@@ -814,28 +806,24 @@ class Row {
      */
     insertRow(other, coefficient = 1.0) {
         this._constant += other._constant * coefficient;
-        let cells = other._cellMap;
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            this.insertSymbol(pair.first, pair.second * coefficient);
-        }
+        other._cellMap.forEach((num, sym) => {
+            this.insertSymbol(sym, num * coefficient);
+        });
     }
     /**
      * Remove a symbol from the row.
      */
     removeSymbol(symbol) {
-        this._cellMap.erase(symbol);
+        this._cellMap.delete(symbol);
     }
     /**
      * Reverse the sign of the constant and cells in the row.
      */
     reverseSign() {
         this._constant = -this._constant;
-        let cells = this._cellMap;
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            let pair = cells.itemAt(i);
-            pair.second = -pair.second;
-        }
+        this._cellMap.forEach((num, sym) => {
+            this._cellMap.set(sym, 0 - num);
+        });
     }
     /**
      * Solve the row for the given symbol.
@@ -851,12 +839,13 @@ class Row {
      */
     solveFor(symbol) {
         let cells = this._cellMap;
-        let pair = cells.erase(symbol);
-        let coeff = -1.0 / pair.second;
+        let num = cells.get(symbol);
+        cells.delete(symbol);
+        let coeff = -1.0 / num;
         this._constant *= coeff;
-        for (let i = 0, n = cells.size(); i < n; ++i) {
-            cells.itemAt(i).second *= coeff;
-        }
+        cells.forEach((num, sym) => {
+            cells.set(sym, num * coeff);
+        });
     }
     /**
      * Solve the row for the given symbols.
@@ -878,8 +867,8 @@ class Row {
      * Returns the coefficient for the given symbol.
      */
     coefficientFor(symbol) {
-        let pair = this._cellMap.find(symbol);
-        return pair !== undefined ? pair.second : 0.0;
+        let num = this._cellMap.get(symbol);
+        return num || 0.0;
     }
     /**
      * Substitute a symbol with the data from another row.
@@ -891,11 +880,12 @@ class Row {
      * If the symbol does not exist in the row, this is a no-op.
      */
     substitute(symbol, row) {
-        let pair = this._cellMap.erase(symbol);
-        if (pair !== undefined) {
-            this.insertRow(row, pair.second);
+        let num = this._cellMap.get(symbol);
+        if (num !== undefined) {
+            this.insertRow(row, num);
         }
+        this._cellMap.delete(symbol);
     }
-    _cellMap = createMap();
+    _cellMap = new Map();
     _constant;
 }

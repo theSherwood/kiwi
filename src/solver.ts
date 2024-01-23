@@ -1,6 +1,5 @@
 import {Constraint, Operator} from './constraint.js'
 import {Expression} from './expression.js'
-import {createMap, IMap} from './maptype.js'
 import {Strength} from './strength.js'
 import {Variable} from './variable.js'
 
@@ -370,11 +369,9 @@ export class Solver {
 	 * @private
 	 */
 	private _chooseSubject(row: Row, tag: ITag): Symbol {
-		let cells = row.cells()
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			if (pair.first.type() === SymbolType.External) {
-				return pair.first
+		for (let sym of row.cells().keys()) {
+			if (sym.type() === SymbolType.External) {
+				return sym
 			}
 		}
 		let type = tag.marker.type()
@@ -530,12 +527,9 @@ export class Solver {
 	 * @private
 	 */
 	private _getEnteringSymbol(objective: Row): Symbol {
-		let cells = objective.cells()
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			let symbol = pair.first
-			if (pair.second < 0.0 && symbol.type() !== SymbolType.Dummy) {
-				return symbol
+		for (let [sym, num] of objective.cells().entries()) {
+			if (num < 0.0 && sym.type() !== SymbolType.Dummy) {
+				return sym
 			}
 		}
 		return INVALID_SYMBOL
@@ -555,11 +549,7 @@ export class Solver {
 	private _getDualEnteringSymbol(row: Row): Symbol {
 		let ratio = Number.MAX_VALUE
 		let entering = INVALID_SYMBOL
-		let cells = row.cells()
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			let symbol = pair.first
-			let c = pair.second
+		row.cells().forEach((c, symbol) => {
 			if (c > 0.0 && symbol.type() !== SymbolType.Dummy) {
 				let coeff = this._objective.coefficientFor(symbol)
 				let r = coeff / c
@@ -568,7 +558,7 @@ export class Solver {
 					entering = symbol
 				}
 			}
-		}
+		})
 		return entering
 	}
 
@@ -695,12 +685,10 @@ export class Solver {
 	 * @private
 	 */
 	private _anyPivotableSymbol(row: Row): Symbol {
-		let cells = row.cells()
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			let type = pair.first.type()
+		for (let [sym, num] of row.cells().entries()) {
+			let type = sym.type()
 			if (type === SymbolType.Slack || type === SymbolType.Error) {
-				return pair.first
+				return sym
 			}
 		}
 		return INVALID_SYMBOL
@@ -826,7 +814,7 @@ class Row {
 	/**
 	 * Returns the mapping of symbols to coefficients.
 	 */
-	public cells(): IMap<Symbol, number> {
+	public cells(): Map<Symbol, number> {
 		return this._cellMap
 	}
 
@@ -841,17 +829,15 @@ class Row {
 	 * Returns true if the row is a constant value.
 	 */
 	public isConstant(): boolean {
-		return this._cellMap.empty()
+		return this._cellMap.size === 0
 	}
 
 	/**
 	 * Returns true if the Row has all dummy symbols.
 	 */
 	public allDummies(): boolean {
-		let cells = this._cellMap
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			if (pair.first.type() !== SymbolType.Dummy) {
+		for (let [sym] of this._cellMap.entries()) {
+			if (sym.type() !== SymbolType.Dummy) {
 				return false
 			}
 		}
@@ -863,7 +849,10 @@ class Row {
 	 */
 	public copy(): Row {
 		let theCopy = new Row(this._constant)
-		theCopy._cellMap = this._cellMap.copy()
+		theCopy._cellMap = new Map()
+		this._cellMap.forEach((num, sym) => {
+			theCopy._cellMap.set(sym, num)
+		})
 		return theCopy
 	}
 
@@ -884,9 +873,11 @@ class Row {
 	 * coefficient is zero, the symbol will be removed from the row.
 	 */
 	public insertSymbol(symbol: Symbol, coefficient: number = 1.0): void {
-		let pair = this._cellMap.setDefault(symbol, () => 0.0)
-		if (nearZero((pair.second += coefficient))) {
-			this._cellMap.erase(symbol)
+		let num = (this._cellMap.get(symbol) || 0.0) + coefficient
+		if (nearZero(num)) {
+			this._cellMap.delete(symbol)
+		} else {
+			this._cellMap.set(symbol, num)
 		}
 	}
 
@@ -900,18 +891,16 @@ class Row {
 	 */
 	public insertRow(other: Row, coefficient: number = 1.0): void {
 		this._constant += other._constant * coefficient
-		let cells = other._cellMap
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			this.insertSymbol(pair.first, pair.second * coefficient)
-		}
+		other._cellMap.forEach((num, sym) => {
+			this.insertSymbol(sym, num * coefficient)
+		})
 	}
 
 	/**
 	 * Remove a symbol from the row.
 	 */
 	public removeSymbol(symbol: Symbol): void {
-		this._cellMap.erase(symbol)
+		this._cellMap.delete(symbol)
 	}
 
 	/**
@@ -919,11 +908,9 @@ class Row {
 	 */
 	public reverseSign(): void {
 		this._constant = -this._constant
-		let cells = this._cellMap
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			let pair = cells.itemAt(i)
-			pair.second = -pair.second
-		}
+		this._cellMap.forEach((num, sym) => {
+			this._cellMap.set(sym, 0 - num)
+		})
 	}
 
 	/**
@@ -940,12 +927,13 @@ class Row {
 	 */
 	public solveFor(symbol: Symbol): void {
 		let cells = this._cellMap
-		let pair = cells.erase(symbol)
-		let coeff = -1.0 / pair.second
+		let num = cells.get(symbol)
+		cells.delete(symbol)
+		let coeff = -1.0 / num
 		this._constant *= coeff
-		for (let i = 0, n = cells.size(); i < n; ++i) {
-			cells.itemAt(i).second *= coeff
-		}
+		cells.forEach((num, sym) => {
+			cells.set(sym, num * coeff)
+		})
 	}
 
 	/**
@@ -969,8 +957,8 @@ class Row {
 	 * Returns the coefficient for the given symbol.
 	 */
 	public coefficientFor(symbol: Symbol): number {
-		let pair = this._cellMap.find(symbol)
-		return pair !== undefined ? pair.second : 0.0
+		let num = this._cellMap.get(symbol)
+		return num || 0.0
 	}
 
 	/**
@@ -983,12 +971,13 @@ class Row {
 	 * If the symbol does not exist in the row, this is a no-op.
 	 */
 	public substitute(symbol: Symbol, row: Row): void {
-		let pair = this._cellMap.erase(symbol)
-		if (pair !== undefined) {
-			this.insertRow(row, pair.second)
+		let num = this._cellMap.get(symbol)
+		if (num !== undefined) {
+			this.insertRow(row, num)
 		}
+		this._cellMap.delete(symbol)
 	}
 
-	private _cellMap = createMap<Symbol, number>()
+	private _cellMap: Map<Symbol, number> = new Map()
 	private _constant: number
 }
