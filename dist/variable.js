@@ -116,6 +116,7 @@ export class Variable {
     _value = 0.0;
     _context = null;
     _id = VarId++;
+    id2 = null;
 }
 /**
  * The internal variable id counter.

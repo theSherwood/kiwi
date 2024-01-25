@@ -131,6 +131,7 @@ export class Variable {
 	private _value: number = 0.0
 	private _context: any = null
 	private _id: number = VarId++
+	public id2: number = null
 }
 
 /**

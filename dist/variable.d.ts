@@ -85,5 +85,6 @@ export declare class Variable {
     private _value;
     private _context;
     private _id;
+    id2: number;
 }
 //# sourceMappingURL=variable.d.ts.map

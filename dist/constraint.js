@@ -72,8 +72,3 @@ export class Constraint {
     _strength;
     id = null;
 }
-/**
- * The internal constraint id counter.
- * @private
- */
-let CnId = 0;

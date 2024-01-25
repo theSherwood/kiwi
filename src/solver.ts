@@ -32,7 +32,7 @@ class UniqueFieldMap<UniqueIdField extends keyof HasUniqueIdField, HasUniqueIdFi
 			if (this.freeList.length) id = this.freeList.pop()
 			else id = this.values.length
 			key[field] = id as any
-			this.keys[id] = value
+			this.keys[id] = key
 		} else {
 			if (this.keys[id] !== key) {
 				throw new Error(`Distinct keys with duplicate ids: ${id}`)
@@ -86,8 +86,6 @@ class UniqueFieldMap<UniqueIdField extends keyof HasUniqueIdField, HasUniqueIdFi
 	public values: (Value | typeof UNDEFINED)[] = []
 	private _uniqueIdField: UniqueIdField
 }
-
-let m = new UniqueFieldMap<'id', {id: number}, Variable>('id')
 
 /**
  * The constraint solver class.
@@ -331,14 +329,20 @@ export class Solver {
 	 */
 	public updateVariables(): void {
 		let rows = this._rowMap
-		this._varMap.forEach((sym, variable) => {
-			let basicRow = rows.get(sym)
-			if (basicRow !== undefined) {
-				variable.setValue(basicRow.constant())
-			} else {
-				variable.setValue(0.0)
+		let keys = this._varMap.keys
+		let values = this._varMap.values
+		for (let i = 0; i < keys.length; i++) {
+			let sym = values[i]
+			if (sym !== UNDEFINED) {
+				let variable = keys[i]
+				let basicRow = rows.get(sym)
+				if (basicRow !== undefined) {
+					variable.setValue(basicRow.constant())
+				} else {
+					variable.setValue(0.0)
+				}
 			}
-		})
+		}
 	}
 
 	/**
@@ -789,7 +793,7 @@ export class Solver {
 
 	private _cnMap = new UniqueFieldMap<'id', Constraint, ITag>('id')
 	private _rowMap: Map<Symbol, Row> = new Map()
-	private _varMap: Map<Variable, Symbol> = new Map()
+	private _varMap = new UniqueFieldMap<'id2', Variable, Symbol>('id2')
 	private _editMap: Map<Variable, IEditInfo> = new Map()
 	private _infeasibleRows: Symbol[] = []
 	private _objective: Row = new Row()
