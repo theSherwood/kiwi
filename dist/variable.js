@@ -10,13 +10,6 @@ export class Variable {
         this._name = name;
     }
     /**
-     * Returns the unique id number of the variable.
-     * @private
-     */
-    id() {
-        return this._id;
-    }
-    /**
      * Returns the name of the variable.
      *
      * @return {String} name of the variable
@@ -115,11 +108,6 @@ export class Variable {
     _name;
     _value = 0.0;
     _context = null;
-    _id = VarId++;
+    id = null;
     id2 = null;
 }
-/**
- * The internal variable id counter.
- * @private
- */
-let VarId = 0;

@@ -8,11 +8,6 @@ import { Expression } from './expression.js';
 export declare class Variable {
     constructor(name?: string);
     /**
-     * Returns the unique id number of the variable.
-     * @private
-     */
-    id(): number;
-    /**
      * Returns the name of the variable.
      *
      * @return {String} name of the variable
@@ -84,7 +79,7 @@ export declare class Variable {
     private _name;
     private _value;
     private _context;
-    private _id;
+    id: number;
     id2: number;
 }
 //# sourceMappingURL=variable.d.ts.map

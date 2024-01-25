@@ -243,6 +243,5 @@ export declare class Solver {
     private _infeasibleRows;
     private _objective;
     private _artificial;
-    private _idTick;
 }
 //# sourceMappingURL=solver.d.ts.map

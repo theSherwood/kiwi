@@ -16,13 +16,13 @@ class UniqueFieldMap<UniqueIdField extends keyof HasUniqueIdField, HasUniqueIdFi
 	}
 
 	has(key: HasUniqueIdField) {
-		let value = this.values[key[this._uniqueIdField] as number]
+		let value = this.data[key[this._uniqueIdField] as number]
 		if (value === undefined) return false
 		return true
 	}
 
 	get(key: HasUniqueIdField) {
-		return this.values[key[this._uniqueIdField] as number]
+		return this.data[key[this._uniqueIdField] as number] as Value
 	}
 
 	set(key: HasUniqueIdField, value: any) {
@@ -30,60 +30,64 @@ class UniqueFieldMap<UniqueIdField extends keyof HasUniqueIdField, HasUniqueIdFi
 		let id = key[field] as number
 		if (id === null) {
 			if (this.freeList.length) id = this.freeList.pop()
-			else id = this.values.length
+			else id = this.data.length
+			this.data[id] = value
+			this.data[id + 1] = key
 			key[field] = id as any
-			this.keys[id] = key
 		} else {
-			if (this.keys[id] !== key) {
+			if (this.data[id + 1] !== key) {
 				throw new Error(`Distinct keys with duplicate ids: ${id}`)
 			}
+			this.data[id] = value
 		}
-		this.values[id] = value
 	}
 
 	delete(key: HasUniqueIdField) {
 		let field = this._uniqueIdField
 		let id = key[field] as number
-		let curr_value = this.values[id]
+		let curr_value = this.data[id]
 		if (curr_value !== UNDEFINED) {
 			this.freeList.push(id)
-			this.values[id] = UNDEFINED
-			this.keys[id] = UNDEFINED
+			this.data[id] = UNDEFINED
+			this.data[id + 1] = UNDEFINED
 		}
 		key[field] = null
-		if (this.values.length > 2 * this.size) {
-			this._resize()
+		if (this.data.length >> 1 > this.size << 1) {
+			this._queueResize = true
+			queueMicrotask(() => {
+				this._resize()
+			})
 		}
 	}
 
 	get size() {
-		return this.values.length - this.freeList.length
+		return (this.data.length >> 1) - this.freeList.length
 	}
 
 	_resize() {
-		let old_values = this.values
-		let old_keys = this.keys
-		let new_values = []
-		let new_keys = []
+		if (!this._queueResize) return
+		this._queueResize = false
+		let old_data = this.data
+		let new_data = []
 		this.freeList = []
 		let field = this._uniqueIdField
 		let id = 0
-		for (let i = 0; i < old_values.length; i++) {
-			let key = old_keys[i]
-			if (key === UNDEFINED) continue
+		for (let i = 0; i < old_data.length; i += 2) {
+			let val = old_data[i]
+			if (val === UNDEFINED) continue
+			let key = old_data[i + 1]
 			;(key as HasUniqueIdField)[field] = id as any
-			new_keys[id] = key
-			new_values[id] = old_values[i]
-			id++
+			new_data[id] = val
+			new_data[id + 1] = key
+			id += 2
 		}
-		this.values = new_values
-		this.keys = new_keys
+		this.data = new_data
 	}
 
 	public resizeFactor = 2
 	public freeList: number[] = []
-	public keys: (HasUniqueIdField | typeof UNDEFINED)[] = []
-	public values: (Value | typeof UNDEFINED)[] = []
+	public data: (HasUniqueIdField | Value | undefined)[] = []
+	private _queueResize = false
 	private _uniqueIdField: UniqueIdField
 }
 
@@ -315,12 +319,17 @@ export class Solver {
 		}
 
 		// Otherwise update each row where the error variables exist.
-		rows.forEach((row, sym) => {
-			let coeff = row.coefficientFor(marker)
-			if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && sym.type() !== SymbolType.External) {
-				this._infeasibleRows.push(sym)
+		let data = rows.data
+		for (let i = 0; i < data.length; i += 2) {
+			let row = data[i] as Row
+			if (row !== undefined) {
+				let sym = data[i + 1] as Symbol
+				let coeff = row.coefficientFor(marker)
+				if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && sym.type() !== SymbolType.External) {
+					this._infeasibleRows.push(sym)
+				}
 			}
-		})
+		}
 		this._dualOptimize()
 	}
 
@@ -329,12 +338,11 @@ export class Solver {
 	 */
 	public updateVariables(): void {
 		let rows = this._rowMap
-		let keys = this._varMap.keys
-		let values = this._varMap.values
-		for (let i = 0; i < keys.length; i++) {
-			let sym = values[i]
+		let data = this._varMap.data
+		for (let i = 0; i < data.length; i += 2) {
+			let sym = data[i] as Symbol
 			if (sym !== UNDEFINED) {
-				let variable = keys[i]
+				let variable = data[i + 1] as Variable
 				let basicRow = rows.get(sym)
 				if (basicRow !== undefined) {
 					variable.setValue(basicRow.constant())
@@ -514,9 +522,13 @@ export class Solver {
 		}
 
 		// Remove the artificial variable from the tableau.
-		this._rowMap.forEach(row => {
-			row.removeSymbol(art)
-		})
+		let data = this._rowMap.data
+		for (let i = 0; i < data.length; i += 2) {
+			let row = data[i] as Row
+			if (row) {
+				row.removeSymbol(art)
+			}
+		}
 		this._objective.removeSymbol(art)
 		return success
 	}
@@ -530,12 +542,17 @@ export class Solver {
 	 * @private
 	 */
 	private _substitute(symbol: Symbol, row: Row): void {
-		this._rowMap.forEach((basicRow, sym) => {
-			basicRow.substitute(symbol, row)
-			if (basicRow.constant() < 0.0 && sym.type() !== SymbolType.External) {
-				this._infeasibleRows.push(sym)
+		let data = this._rowMap.data
+		for (let i = 0; i < data.length; i += 2) {
+			let basicRow = data[i] as Row
+			if (basicRow) {
+				basicRow.substitute(symbol, row)
+				let sym = data[i + 1] as Symbol
+				if (basicRow.constant() < 0.0 && sym.type() !== SymbolType.External) {
+					this._infeasibleRows.push(sym)
+				}
 			}
-		})
+		}
 		this._objective.substitute(symbol, row)
 		if (this._artificial) {
 			this._artificial.substitute(symbol, row)
@@ -663,8 +680,11 @@ export class Solver {
 	private _getLeavingSymbol(entering: Symbol): Symbol {
 		let ratio = Number.MAX_VALUE
 		let found = INVALID_SYMBOL
-		this._rowMap.forEach((row, symbol) => {
-			if (symbol.type() !== SymbolType.External) {
+		let data = this._rowMap.data
+		for (let i = 0; i < data.length; i += 2) {
+			let symbol = data[i + 1] as Symbol
+			if (symbol && symbol.type() !== SymbolType.External) {
+				let row = data[i] as Row
 				let temp = row.coefficientFor(entering)
 				if (temp < 0.0) {
 					let temp_ratio = -row.constant() / temp
@@ -674,7 +694,7 @@ export class Solver {
 					}
 				}
 			}
-		})
+		}
 		return found
 	}
 
@@ -707,27 +727,32 @@ export class Solver {
 		let first = invalid
 		let second = invalid
 		let third = invalid
-		this._rowMap.forEach((row, symbol) => {
-			let c = row.coefficientFor(marker)
-			if (c === 0.0) {
-				return
-			}
-			if (symbol.type() === SymbolType.External) {
-				third = symbol
-			} else if (c < 0.0) {
-				let r = -row.constant() / c
-				if (r < r1) {
-					r1 = r
-					first = symbol
+		let data = this._rowMap.data
+		for (let i = 0; i < data.length; i += 2) {
+			let row = data[i] as Row
+			if (row) {
+				let c = row.coefficientFor(marker)
+				if (c === 0.0) {
+					return
 				}
-			} else {
-				let r = row.constant() / c
-				if (r < r2) {
-					r2 = r
-					second = symbol
+				let symbol = data[i + 1] as Symbol
+				if (symbol.type() === SymbolType.External) {
+					third = symbol
+				} else if (c < 0.0) {
+					let r = -row.constant() / c
+					if (r < r1) {
+						r1 = r
+						first = symbol
+					}
+				} else {
+					let r = row.constant() / c
+					if (r < r2) {
+						r2 = r
+						second = symbol
+					}
 				}
 			}
-		})
+		}
 		if (first !== invalid) {
 			return first
 		}
@@ -788,17 +813,16 @@ export class Solver {
 	 * @private
 	 */
 	private _makeSymbol(type: SymbolType): Symbol {
-		return new Symbol(type, this._idTick++)
+		return new Symbol(type)
 	}
 
 	private _cnMap = new UniqueFieldMap<'id', Constraint, ITag>('id')
-	private _rowMap: Map<Symbol, Row> = new Map()
+	private _rowMap = new UniqueFieldMap<'id', Symbol, Row>('id')
 	private _varMap = new UniqueFieldMap<'id2', Variable, Symbol>('id2')
-	private _editMap: Map<Variable, IEditInfo> = new Map()
+	private _editMap = new UniqueFieldMap<'id', Variable, IEditInfo>('id')
 	private _infeasibleRows: Symbol[] = []
 	private _objective: Row = new Row()
 	private _artificial: Row = null
-	private _idTick: number = 0
 }
 
 /**
@@ -858,16 +882,8 @@ class Symbol {
 	 * @param [type] The type of the symbol.
 	 * @param [id] The unique id number of the symbol.
 	 */
-	constructor(type: SymbolType, id: number) {
-		this._id = id
+	constructor(type: SymbolType) {
 		this._type = type
-	}
-
-	/**
-	 * Returns the unique id number of the symbol.
-	 */
-	public id(): number {
-		return this._id
 	}
 
 	/**
@@ -877,7 +893,7 @@ class Symbol {
 		return this._type
 	}
 
-	private _id: number
+	public id: number = null
 	private _type: SymbolType
 }
 
@@ -885,7 +901,7 @@ class Symbol {
  * A static invalid symbol
  * @private
  */
-let INVALID_SYMBOL = new Symbol(SymbolType.Invalid, -1)
+let INVALID_SYMBOL = new Symbol(SymbolType.Invalid)
 
 /**
  * An internal row class used by the solver.

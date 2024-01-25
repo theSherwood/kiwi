@@ -12,13 +12,13 @@ class UniqueFieldMap {
         this._uniqueIdField = uniqueIdField;
     }
     has(key) {
-        let value = this.values[key[this._uniqueIdField]];
+        let value = this.data[key[this._uniqueIdField]];
         if (value === undefined)
             return false;
         return true;
     }
     get(key) {
-        return this.values[key[this._uniqueIdField]];
+        return this.data[key[this._uniqueIdField]];
     }
     set(key, value) {
         let field = this._uniqueIdField;
@@ -27,58 +27,63 @@ class UniqueFieldMap {
             if (this.freeList.length)
                 id = this.freeList.pop();
             else
-                id = this.values.length;
+                id = this.data.length;
+            this.data[id] = value;
+            this.data[id + 1] = key;
             key[field] = id;
-            this.keys[id] = key;
         }
         else {
-            if (this.keys[id] !== key) {
+            if (this.data[id + 1] !== key) {
                 throw new Error(`Distinct keys with duplicate ids: ${id}`);
             }
+            this.data[id] = value;
         }
-        this.values[id] = value;
     }
     delete(key) {
         let field = this._uniqueIdField;
         let id = key[field];
-        let curr_value = this.values[id];
+        let curr_value = this.data[id];
         if (curr_value !== UNDEFINED) {
             this.freeList.push(id);
-            this.values[id] = UNDEFINED;
-            this.keys[id] = UNDEFINED;
+            this.data[id] = UNDEFINED;
+            this.data[id + 1] = UNDEFINED;
         }
         key[field] = null;
-        if (this.values.length > 2 * this.size) {
-            this._resize();
+        if (this.data.length >> 1 > this.size << 1) {
+            this._queueResize = true;
+            queueMicrotask(() => {
+                this._resize();
+            });
         }
     }
     get size() {
-        return this.values.length - this.freeList.length;
+        return (this.data.length >> 1) - this.freeList.length;
     }
     _resize() {
-        let old_values = this.values;
-        let old_keys = this.keys;
-        let new_values = [];
-        let new_keys = [];
+        if (!this._queueResize)
+            return;
+        this._queueResize = false;
+        let old_data = this.data;
+        let new_data = [];
         this.freeList = [];
         let field = this._uniqueIdField;
         let id = 0;
-        for (let i = 0; i < old_values.length; i++) {
-            let key = old_keys[i];
-            if (key === UNDEFINED)
+        for (let i = 0; i < old_data.length; i += 2) {
+            let val = old_data[i];
+            if (val === UNDEFINED)
                 continue;
+            let key = old_data[i + 1];
             key[field] = id;
-            new_keys[id] = key;
-            new_values[id] = old_values[i];
-            id++;
+            new_data[id] = val;
+            new_data[id + 1] = key;
+            id += 2;
         }
-        this.values = new_values;
-        this.keys = new_keys;
+        this.data = new_data;
     }
     resizeFactor = 2;
     freeList = [];
-    keys = [];
-    values = [];
+    data = [];
+    _queueResize = false;
     _uniqueIdField;
 }
 /**
@@ -285,12 +290,17 @@ export class Solver {
             return;
         }
         // Otherwise update each row where the error variables exist.
-        rows.forEach((row, sym) => {
-            let coeff = row.coefficientFor(marker);
-            if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && sym.type() !== SymbolType.External) {
-                this._infeasibleRows.push(sym);
+        let data = rows.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let row = data[i];
+            if (row !== undefined) {
+                let sym = data[i + 1];
+                let coeff = row.coefficientFor(marker);
+                if (coeff !== 0.0 && row.add(delta * coeff) < 0.0 && sym.type() !== SymbolType.External) {
+                    this._infeasibleRows.push(sym);
+                }
             }
-        });
+        }
         this._dualOptimize();
     }
     /**
@@ -298,13 +308,11 @@ export class Solver {
      */
     updateVariables() {
         let rows = this._rowMap;
-        let keys = this._varMap.keys;
-        let values = this._varMap.values;
-        for (let i = 0; i < keys.length; i++) {
-            let sym = values[i];
+        let data = this._varMap.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let sym = data[i];
             if (sym !== UNDEFINED) {
-                let variable = keys[i];
-                // console.log('VAR', variable, sym, i, keys, values, this._varMap)
+                let variable = data[i + 1];
                 let basicRow = rows.get(sym);
                 if (basicRow !== undefined) {
                     variable.setValue(basicRow.constant());
@@ -476,9 +484,13 @@ export class Solver {
             this._rowMap.set(entering, basicRow);
         }
         // Remove the artificial variable from the tableau.
-        this._rowMap.forEach(row => {
-            row.removeSymbol(art);
-        });
+        let data = this._rowMap.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let row = data[i];
+            if (row) {
+                row.removeSymbol(art);
+            }
+        }
         this._objective.removeSymbol(art);
         return success;
     }
@@ -491,12 +503,17 @@ export class Solver {
      * @private
      */
     _substitute(symbol, row) {
-        this._rowMap.forEach((basicRow, sym) => {
-            basicRow.substitute(symbol, row);
-            if (basicRow.constant() < 0.0 && sym.type() !== SymbolType.External) {
-                this._infeasibleRows.push(sym);
+        let data = this._rowMap.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let basicRow = data[i];
+            if (basicRow) {
+                basicRow.substitute(symbol, row);
+                let sym = data[i + 1];
+                if (basicRow.constant() < 0.0 && sym.type() !== SymbolType.External) {
+                    this._infeasibleRows.push(sym);
+                }
             }
-        });
+        }
         this._objective.substitute(symbol, row);
         if (this._artificial) {
             this._artificial.substitute(symbol, row);
@@ -617,8 +634,11 @@ export class Solver {
     _getLeavingSymbol(entering) {
         let ratio = Number.MAX_VALUE;
         let found = INVALID_SYMBOL;
-        this._rowMap.forEach((row, symbol) => {
-            if (symbol.type() !== SymbolType.External) {
+        let data = this._rowMap.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let symbol = data[i + 1];
+            if (symbol && symbol.type() !== SymbolType.External) {
+                let row = data[i];
                 let temp = row.coefficientFor(entering);
                 if (temp < 0.0) {
                     let temp_ratio = -row.constant() / temp;
@@ -628,7 +648,7 @@ export class Solver {
                     }
                 }
             }
-        });
+        }
         return found;
     }
     /**
@@ -660,29 +680,34 @@ export class Solver {
         let first = invalid;
         let second = invalid;
         let third = invalid;
-        this._rowMap.forEach((row, symbol) => {
-            let c = row.coefficientFor(marker);
-            if (c === 0.0) {
-                return;
-            }
-            if (symbol.type() === SymbolType.External) {
-                third = symbol;
-            }
-            else if (c < 0.0) {
-                let r = -row.constant() / c;
-                if (r < r1) {
-                    r1 = r;
-                    first = symbol;
+        let data = this._rowMap.data;
+        for (let i = 0; i < data.length; i += 2) {
+            let row = data[i];
+            if (row) {
+                let c = row.coefficientFor(marker);
+                if (c === 0.0) {
+                    return;
+                }
+                let symbol = data[i + 1];
+                if (symbol.type() === SymbolType.External) {
+                    third = symbol;
+                }
+                else if (c < 0.0) {
+                    let r = -row.constant() / c;
+                    if (r < r1) {
+                        r1 = r;
+                        first = symbol;
+                    }
+                }
+                else {
+                    let r = row.constant() / c;
+                    if (r < r2) {
+                        r2 = r;
+                        second = symbol;
+                    }
                 }
             }
-            else {
-                let r = row.constant() / c;
-                if (r < r2) {
-                    r2 = r;
-                    second = symbol;
-                }
-            }
-        });
+        }
         if (first !== invalid) {
             return first;
         }
@@ -740,16 +765,15 @@ export class Solver {
      * @private
      */
     _makeSymbol(type) {
-        return new Symbol(type, this._idTick++);
+        return new Symbol(type);
     }
     _cnMap = new UniqueFieldMap('id');
-    _rowMap = new Map();
+    _rowMap = new UniqueFieldMap('id');
     _varMap = new UniqueFieldMap('id2');
-    _editMap = new Map();
+    _editMap = new UniqueFieldMap('id');
     _infeasibleRows = [];
     _objective = new Row();
     _artificial = null;
-    _idTick = 0;
 }
 /**
  * Test whether a value is approximately zero.
@@ -782,15 +806,8 @@ class Symbol {
      * @param [type] The type of the symbol.
      * @param [id] The unique id number of the symbol.
      */
-    constructor(type, id) {
-        this._id = id;
+    constructor(type) {
         this._type = type;
-    }
-    /**
-     * Returns the unique id number of the symbol.
-     */
-    id() {
-        return this._id;
     }
     /**
      * Returns the type of the symbol.
@@ -798,14 +815,14 @@ class Symbol {
     type() {
         return this._type;
     }
-    _id;
+    id = null;
     _type;
 }
 /**
  * A static invalid symbol
  * @private
  */
-let INVALID_SYMBOL = new Symbol(SymbolType.Invalid, -1);
+let INVALID_SYMBOL = new Symbol(SymbolType.Invalid);
 /**
  * An internal row class used by the solver.
  * @private
