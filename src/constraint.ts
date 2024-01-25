@@ -48,14 +48,6 @@ export class Constraint {
 	}
 
 	/**
-	 * Returns the unique id number of the constraint.
-	 * @private
-	 */
-	public id(): number {
-		return this._id
-	}
-
-	/**
 	 * Returns the expression of the constraint.
 	 *
 	 * @return {Expression} expression
@@ -91,11 +83,5 @@ export class Constraint {
 	private _expression: Expression
 	private _operator: Operator
 	private _strength: number
-	private _id: number = CnId++
+	public id: number = null
 }
-
-/**
- * The internal constraint id counter.
- * @private
- */
-let CnId = 0

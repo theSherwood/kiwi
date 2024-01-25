@@ -1,6 +1,87 @@
 import { Constraint, Operator } from './constraint.js';
 import { Expression } from './expression.js';
 import { Strength } from './strength.js';
+const TOMBSTONE = undefined;
+/**
+ * Requires every key to have an `id` field which will be controlled by the
+ * IdMap. Consequently, no key can be the key of more than one IdMap.
+ *
+ */
+class UniqueFieldMap {
+    constructor(uniqueIdField) {
+        this._uniqueIdField = uniqueIdField;
+    }
+    has(key) {
+        let value = this.values[key[this._uniqueIdField]];
+        if (value === undefined)
+            return false;
+        return true;
+    }
+    get(key) {
+        return this.values[key[this._uniqueIdField]];
+    }
+    set(key, value) {
+        let field = this._uniqueIdField;
+        let id = key[field];
+        if (id === null) {
+            if (this.freeList.length)
+                id = this.freeList.pop();
+            else
+                id = this.values.length;
+            key[field] = id;
+            this.keys[id] = value;
+        }
+        else {
+            if (this.keys[id] !== key) {
+                throw new Error(`Distinct keys with duplicate ids: ${id}`);
+            }
+        }
+        this.values[id] = value;
+    }
+    delete(key) {
+        let field = this._uniqueIdField;
+        let id = key[field];
+        let curr_value = this.values[id];
+        if (curr_value !== TOMBSTONE) {
+            this.freeList.push(id);
+            this.values[id] = TOMBSTONE;
+            this.keys[id] = TOMBSTONE;
+        }
+        key[field] = null;
+        if (this.values.length > 2 * this.size) {
+            this._resize();
+        }
+    }
+    get size() {
+        return this.values.length - this.freeList.length;
+    }
+    _resize() {
+        let old_values = this.values;
+        let old_keys = this.keys;
+        let new_values = [];
+        let new_keys = [];
+        this.freeList = [];
+        let field = this._uniqueIdField;
+        let id = 0;
+        for (let i = 0; i < old_values.length; i++) {
+            let key = old_keys[i];
+            if (key === TOMBSTONE)
+                continue;
+            key[field] = id;
+            new_keys[id] = key;
+            new_values[id] = old_values[i];
+            id++;
+        }
+        this.values = new_values;
+        this.keys = new_keys;
+    }
+    resizeFactor = 2;
+    freeList = [];
+    keys = [];
+    values = [];
+    _uniqueIdField;
+}
+let m = new UniqueFieldMap('id');
 /**
  * The constraint solver class.
  *
@@ -655,7 +736,7 @@ export class Solver {
     _makeSymbol(type) {
         return new Symbol(type, this._idTick++);
     }
-    _cnMap = new Map();
+    _cnMap = new UniqueFieldMap('id');
     _rowMap = new Map();
     _varMap = new Map();
     _editMap = new Map();

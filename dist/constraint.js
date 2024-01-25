@@ -41,13 +41,6 @@ export class Constraint {
         }
     }
     /**
-     * Returns the unique id number of the constraint.
-     * @private
-     */
-    id() {
-        return this._id;
-    }
-    /**
      * Returns the expression of the constraint.
      *
      * @return {Expression} expression
@@ -77,7 +70,7 @@ export class Constraint {
     _expression;
     _operator;
     _strength;
-    _id = CnId++;
+    id = null;
 }
 /**
  * The internal constraint id counter.

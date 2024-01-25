@@ -31,11 +31,6 @@ export declare enum Operator {
 export declare class Constraint {
     constructor(expression: Expression | Variable, operator: Operator, rhs?: Expression | Variable | number, strength?: number);
     /**
-     * Returns the unique id number of the constraint.
-     * @private
-     */
-    id(): number;
-    /**
      * Returns the expression of the constraint.
      *
      * @return {Expression} expression
@@ -57,6 +52,6 @@ export declare class Constraint {
     private _expression;
     private _operator;
     private _strength;
-    private _id;
+    id: number;
 }
 //# sourceMappingURL=constraint.d.ts.map

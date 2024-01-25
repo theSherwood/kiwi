@@ -3,6 +3,92 @@ import {Expression} from './expression.js'
 import {Strength} from './strength.js'
 import {Variable} from './variable.js'
 
+const UNDEFINED: undefined = undefined
+
+/**
+ * Requires every key to have an `id` field which will be controlled by the
+ * IdMap. Consequently, no key can be the key of more than one IdMap.
+ *
+ */
+class UniqueFieldMap<UniqueIdField extends keyof HasUniqueIdField, HasUniqueIdField, Value extends NonNullable<any>> {
+	constructor(uniqueIdField: UniqueIdField) {
+		this._uniqueIdField = uniqueIdField
+	}
+
+	has(key: HasUniqueIdField) {
+		let value = this.values[key[this._uniqueIdField] as number]
+		if (value === undefined) return false
+		return true
+	}
+
+	get(key: HasUniqueIdField) {
+		return this.values[key[this._uniqueIdField] as number]
+	}
+
+	set(key: HasUniqueIdField, value: any) {
+		let field = this._uniqueIdField
+		let id = key[field] as number
+		if (id === null) {
+			if (this.freeList.length) id = this.freeList.pop()
+			else id = this.values.length
+			key[field] = id as any
+			this.keys[id] = value
+		} else {
+			if (this.keys[id] !== key) {
+				throw new Error(`Distinct keys with duplicate ids: ${id}`)
+			}
+		}
+		this.values[id] = value
+	}
+
+	delete(key: HasUniqueIdField) {
+		let field = this._uniqueIdField
+		let id = key[field] as number
+		let curr_value = this.values[id]
+		if (curr_value !== UNDEFINED) {
+			this.freeList.push(id)
+			this.values[id] = UNDEFINED
+			this.keys[id] = UNDEFINED
+		}
+		key[field] = null
+		if (this.values.length > 2 * this.size) {
+			this._resize()
+		}
+	}
+
+	get size() {
+		return this.values.length - this.freeList.length
+	}
+
+	_resize() {
+		let old_values = this.values
+		let old_keys = this.keys
+		let new_values = []
+		let new_keys = []
+		this.freeList = []
+		let field = this._uniqueIdField
+		let id = 0
+		for (let i = 0; i < old_values.length; i++) {
+			let key = old_keys[i]
+			if (key === UNDEFINED) continue
+			;(key as HasUniqueIdField)[field] = id as any
+			new_keys[id] = key
+			new_values[id] = old_values[i]
+			id++
+		}
+		this.values = new_values
+		this.keys = new_keys
+	}
+
+	public resizeFactor = 2
+	public freeList: number[] = []
+	public keys: (HasUniqueIdField | typeof UNDEFINED)[] = []
+	public values: (Value | typeof UNDEFINED)[] = []
+	private _uniqueIdField: UniqueIdField
+}
+
+let m = new UniqueFieldMap<'id', {id: number}, Variable>('id')
+
 /**
  * The constraint solver class.
  *
@@ -701,7 +787,7 @@ export class Solver {
 		return new Symbol(type, this._idTick++)
 	}
 
-	private _cnMap: Map<Constraint, ITag> = new Map()
+	private _cnMap = new UniqueFieldMap<'id', Constraint, ITag>('id')
 	private _rowMap: Map<Symbol, Row> = new Map()
 	private _varMap: Map<Variable, Symbol> = new Map()
 	private _editMap: Map<Variable, IEditInfo> = new Map()
