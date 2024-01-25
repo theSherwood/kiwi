@@ -17,18 +17,6 @@ import { Variable } from './variable.js';
 export declare class Expression {
     constructor(...args: any[]);
     /**
-     * Returns the mapping of terms in the expression.
-     *
-     * This *must* be treated as const.
-     * @private
-     */
-    terms(): Map<Variable, number>;
-    /**
-     * Returns the constant of the expression.
-     * @private
-     */
-    constant(): number;
-    /**
      * Returns the computed value of the expression.
      *
      * @private
@@ -67,7 +55,7 @@ export declare class Expression {
     divide(coefficient: number): Expression;
     isConstant(): boolean;
     toString(): string;
-    private _terms;
-    private _constant;
+    terms: Map<Variable, number>;
+    constant: number;
 }
 //# sourceMappingURL=expression.d.ts.map

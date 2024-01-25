@@ -35,28 +35,10 @@ export declare class Constraint {
      * @private
      */
     id(): number;
-    /**
-     * Returns the expression of the constraint.
-     *
-     * @return {Expression} expression
-     */
-    expression(): Expression;
-    /**
-     * Returns the relational operator of the constraint.
-     *
-     * @return {Operator} linear constraint operator
-     */
-    op(): Operator;
-    /**
-     * Returns the strength of the constraint.
-     *
-     * @return {Number} strength
-     */
-    strength(): number;
     toString(): string;
-    private _expression;
-    private _operator;
-    private _strength;
+    expression: Expression;
+    op: Operator;
+    strength: number;
     private _id;
 }
 //# sourceMappingURL=constraint.d.ts.map

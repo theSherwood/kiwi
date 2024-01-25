@@ -38,60 +38,23 @@ export class Constraint {
 		rhs?: Expression | Variable | number,
 		strength: number = Strength.required,
 	) {
-		this._operator = operator
-		this._strength = Strength.clip(strength)
+		this.op = operator
+		this.strength = Strength.clip(strength)
 		if (rhs === undefined && expression instanceof Expression) {
-			this._expression = expression
+			this.expression = expression
 		} else {
-			this._expression = expression.minus(rhs)
+			this.expression = expression.minus(rhs)
 		}
 	}
 
-	/**
-	 * Returns the unique id number of the constraint.
-	 * @private
-	 */
-	public id(): number {
-		return this._id
-	}
-
-	/**
-	 * Returns the expression of the constraint.
-	 *
-	 * @return {Expression} expression
-	 */
-	public expression(): Expression {
-		return this._expression
-	}
-
-	/**
-	 * Returns the relational operator of the constraint.
-	 *
-	 * @return {Operator} linear constraint operator
-	 */
-	public op(): Operator {
-		return this._operator
-	}
-
-	/**
-	 * Returns the strength of the constraint.
-	 *
-	 * @return {Number} strength
-	 */
-	public strength(): number {
-		return this._strength
-	}
-
 	public toString(): string {
-		return (
-			this._expression.toString() + ' ' + ['<=', '>=', '='][this._operator] + ' 0 (' + this._strength.toString() + ')'
-		)
+		return this.expression.toString() + ' ' + ['<=', '>=', '='][this.op] + ' 0 (' + this.strength.toString() + ')'
 	}
 
-	private _expression: Expression
-	private _operator: Operator
-	private _strength: number
-	private _id: number = CnId++
+	public expression: Expression
+	public op: Operator
+	public strength: number
+	public id: number = CnId++
 }
 
 /**

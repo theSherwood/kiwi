@@ -8,44 +8,6 @@ import { Expression } from './expression.js';
 export declare class Variable {
     constructor(name?: string);
     /**
-     * Returns the unique id number of the variable.
-     * @private
-     */
-    id(): number;
-    /**
-     * Returns the name of the variable.
-     *
-     * @return {String} name of the variable
-     */
-    name(): string;
-    /**
-     * Set the name of the variable.
-     *
-     * @param {String} name Name of the variable
-     */
-    setName(name: string): void;
-    /**
-     * Returns the user context object of the variable.
-     * @private
-     */
-    context(): any;
-    /**
-     * Set the user context object of the variable.
-     * @private
-     */
-    setContext(context: any): void;
-    /**
-     * Returns the value of the variable.
-     *
-     * @return {Number} Calculated value
-     */
-    value(): number;
-    /**
-     * Set the value of the variable.
-     * @private
-     */
-    setValue(value: number): void;
-    /**
      * Creates a new Expression by adding a number, variable or expression
      * to the variable.
      *
@@ -81,9 +43,9 @@ export declare class Variable {
      */
     toJSON(): any;
     toString(): string;
-    private _name;
-    private _value;
-    private _context;
-    private _id;
+    name: string;
+    value: number;
+    context: any;
+    id: number;
 }
 //# sourceMappingURL=variable.d.ts.map

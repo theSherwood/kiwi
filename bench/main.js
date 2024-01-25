@@ -158,8 +158,8 @@ async function main() {
 		//console.log('superView: ' + JSON.stringify(superView, undefined, 2));
 		//console.log('subView1: ' + JSON.stringify(subView1, undefined, 2));
 		//console.log('subView2: ' + JSON.stringify(subView2, undefined, 2));
-		assert.equal(subView1.width.value(), 150)
-		assert.equal(subView2.left.value(), 150)
+		assert.equal(subView1.width.value, 150)
+		assert.equal(subView2.left.value, 150)
 
 		// Return data
 		return {
@@ -233,8 +233,8 @@ async function main() {
 		//console.log('superView: ' + JSON.stringify(superView, undefined, 2));
 		//console.log('subView1: ' + JSON.stringify(subView1, undefined, 2));
 		//console.log('subView2: ' + JSON.stringify(subView2, undefined, 2));
-		assert.equal(subView1.width.value(), 150)
-		assert.equal(subView2.left.value(), 150)
+		assert.equal(subView1.width.value, 150)
+		assert.equal(subView2.left.value, 150)
 
 		// Return data
 		return {

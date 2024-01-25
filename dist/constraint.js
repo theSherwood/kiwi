@@ -31,13 +31,13 @@ export var Operator;
  */
 export class Constraint {
     constructor(expression, operator, rhs, strength = Strength.required) {
-        this._operator = operator;
-        this._strength = Strength.clip(strength);
+        this.op = operator;
+        this.strength = Strength.clip(strength);
         if (rhs === undefined && expression instanceof Expression) {
-            this._expression = expression;
+            this.expression = expression;
         }
         else {
-            this._expression = expression.minus(rhs);
+            this.expression = expression.minus(rhs);
         }
     }
     /**
@@ -47,36 +47,12 @@ export class Constraint {
     id() {
         return this._id;
     }
-    /**
-     * Returns the expression of the constraint.
-     *
-     * @return {Expression} expression
-     */
-    expression() {
-        return this._expression;
-    }
-    /**
-     * Returns the relational operator of the constraint.
-     *
-     * @return {Operator} linear constraint operator
-     */
-    op() {
-        return this._operator;
-    }
-    /**
-     * Returns the strength of the constraint.
-     *
-     * @return {Number} strength
-     */
-    strength() {
-        return this._strength;
-    }
     toString() {
-        return (this._expression.toString() + ' ' + ['<=', '>=', '='][this._operator] + ' 0 (' + this._strength.toString() + ')');
+        return this.expression.toString() + ' ' + ['<=', '>=', '='][this.op] + ' 0 (' + this.strength.toString() + ')';
     }
-    _expression;
-    _operator;
-    _strength;
+    expression;
+    op;
+    strength;
     _id = CnId++;
 }
 /**

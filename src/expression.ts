@@ -19,26 +19,8 @@ export class Expression {
 	constructor(...args: any[])
 	constructor() {
 		let parsed = parseArgs(arguments)
-		this._terms = parsed.terms
-		this._constant = parsed.constant
-	}
-
-	/**
-	 * Returns the mapping of terms in the expression.
-	 *
-	 * This *must* be treated as const.
-	 * @private
-	 */
-	public terms(): Map<Variable, number> {
-		return this._terms
-	}
-
-	/**
-	 * Returns the constant of the expression.
-	 * @private
-	 */
-	public constant(): number {
-		return this._constant
+		this.terms = parsed.terms
+		this.constant = parsed.constant
 	}
 
 	/**
@@ -48,9 +30,9 @@ export class Expression {
 	 * @return {Number} computed value of the expression
 	 */
 	public value(): number {
-		let result = this._constant
-		this._terms.forEach((num, variable) => {
-			result += variable.value() * num
+		let result = this.constant
+		this.terms.forEach((num, variable) => {
+			result += variable.value * num
 		})
 		return result
 	}
@@ -98,27 +80,27 @@ export class Expression {
 	}
 
 	public isConstant(): boolean {
-		return this._terms.size == 0
+		return this.terms.size == 0
 	}
 
 	public toString(): string {
 		let arr: string[] = []
-		this._terms.forEach((num, variable) => {
+		this.terms.forEach((num, variable) => {
 			arr.push(num + '*' + variable.toString())
 		})
 		let result = arr.join(' + ')
 
-		if (!this.isConstant() && this._constant !== 0) {
+		if (!this.isConstant() && this.constant !== 0) {
 			result += ' + '
 		}
 
-		result += this._constant
+		result += this.constant
 
 		return result
 	}
 
-	private _terms: Map<Variable, number>
-	private _constant: number
+	public terms: Map<Variable, number>
+	public constant: number
 }
 
 /**
@@ -135,7 +117,6 @@ interface IParseResult {
  */
 function parseArgs(args: IArguments): IParseResult {
 	let constant = 0.0
-	let factory = () => 0.0
 	let terms: Map<Variable, number> = new Map()
 	for (let i = 0, n = args.length; i < n; ++i) {
 		let item = args[i]
@@ -145,9 +126,8 @@ function parseArgs(args: IArguments): IParseResult {
 			let n = terms.get(item) || 0.0
 			terms.set(item, n + 1.0)
 		} else if (item instanceof Expression) {
-			constant += item.constant()
-			let terms2 = item.terms()
-			terms2.forEach((num, variable) => {
+			constant += item.constant
+			item.terms.forEach((num, variable) => {
 				terms.set(variable, (terms.get(variable) || 0.0) + num)
 			})
 		} else if (item instanceof Array) {
@@ -163,9 +143,8 @@ function parseArgs(args: IArguments): IParseResult {
 				let n = terms.get(value2) || 0.0
 				terms.set(value2, n + value)
 			} else if (value2 instanceof Expression) {
-				constant += value2.constant() * value
-				let terms2 = value2.terms()
-				terms2.forEach((num, variable) => {
+				constant += value2.constant * value
+				value2.terms.forEach((num, variable) => {
 					terms.set(variable, (terms.get(variable) || 0.0) + num * value)
 				})
 			} else {

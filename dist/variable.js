@@ -7,59 +7,7 @@ import { Expression } from './expression.js';
  */
 export class Variable {
     constructor(name = '') {
-        this._name = name;
-    }
-    /**
-     * Returns the unique id number of the variable.
-     * @private
-     */
-    id() {
-        return this._id;
-    }
-    /**
-     * Returns the name of the variable.
-     *
-     * @return {String} name of the variable
-     */
-    name() {
-        return this._name;
-    }
-    /**
-     * Set the name of the variable.
-     *
-     * @param {String} name Name of the variable
-     */
-    setName(name) {
-        this._name = name;
-    }
-    /**
-     * Returns the user context object of the variable.
-     * @private
-     */
-    context() {
-        return this._context;
-    }
-    /**
-     * Set the user context object of the variable.
-     * @private
-     */
-    setContext(context) {
-        this._context = context;
-    }
-    /**
-     * Returns the value of the variable.
-     *
-     * @return {Number} Calculated value
-     */
-    value() {
-        return this._value;
-    }
-    /**
-     * Set the value of the variable.
-     * @private
-     */
-    setValue(value) {
-        this._value = value;
+        this.name = name;
     }
     /**
      * Creates a new Expression by adding a number, variable or expression
@@ -105,17 +53,17 @@ export class Variable {
      */
     toJSON() {
         return {
-            name: this._name,
-            value: this._value,
+            name: this.name,
+            value: this.value,
         };
     }
     toString() {
-        return this._context + '[' + this._name + ':' + this._value + ']';
+        return this.context + '[' + this.name + ':' + this.value + ']';
     }
-    _name;
-    _value = 0.0;
-    _context = null;
-    _id = VarId++;
+    name;
+    value = 0.0;
+    context = null;
+    id = VarId++;
 }
 /**
  * The internal variable id counter.

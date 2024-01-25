@@ -8,66 +8,7 @@ import {Expression} from './expression.js'
  */
 export class Variable {
 	constructor(name: string = '') {
-		this._name = name
-	}
-
-	/**
-	 * Returns the unique id number of the variable.
-	 * @private
-	 */
-	public id(): number {
-		return this._id
-	}
-
-	/**
-	 * Returns the name of the variable.
-	 *
-	 * @return {String} name of the variable
-	 */
-	public name(): string {
-		return this._name
-	}
-
-	/**
-	 * Set the name of the variable.
-	 *
-	 * @param {String} name Name of the variable
-	 */
-	public setName(name: string): void {
-		this._name = name
-	}
-
-	/**
-	 * Returns the user context object of the variable.
-	 * @private
-	 */
-	public context(): any {
-		return this._context
-	}
-
-	/**
-	 * Set the user context object of the variable.
-	 * @private
-	 */
-	public setContext(context: any): void {
-		this._context = context
-	}
-
-	/**
-	 * Returns the value of the variable.
-	 *
-	 * @return {Number} Calculated value
-	 */
-	public value(): number {
-		return this._value
-	}
-
-	/**
-	 * Set the value of the variable.
-	 * @private
-	 */
-	public setValue(value: number): void {
-		this._value = value
+		this.name = name
 	}
 
 	/**
@@ -118,19 +59,19 @@ export class Variable {
 	 */
 	public toJSON(): any {
 		return {
-			name: this._name,
-			value: this._value,
+			name: this.name,
+			value: this.value,
 		}
 	}
 
 	public toString(): string {
-		return this._context + '[' + this._name + ':' + this._value + ']'
+		return this.context + '[' + this.name + ':' + this.value + ']'
 	}
 
-	private _name: string
-	private _value: number = 0.0
-	private _context: any = null
-	private _id: number = VarId++
+	public name: string
+	public value: number = 0.0
+	public context: any = null
+	public id: number = VarId++
 }
 
 /**

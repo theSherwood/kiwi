@@ -17,24 +17,8 @@ import { Variable } from './variable.js';
 export class Expression {
     constructor() {
         let parsed = parseArgs(arguments);
-        this._terms = parsed.terms;
-        this._constant = parsed.constant;
-    }
-    /**
-     * Returns the mapping of terms in the expression.
-     *
-     * This *must* be treated as const.
-     * @private
-     */
-    terms() {
-        return this._terms;
-    }
-    /**
-     * Returns the constant of the expression.
-     * @private
-     */
-    constant() {
-        return this._constant;
+        this.terms = parsed.terms;
+        this.constant = parsed.constant;
     }
     /**
      * Returns the computed value of the expression.
@@ -43,9 +27,9 @@ export class Expression {
      * @return {Number} computed value of the expression
      */
     value() {
-        let result = this._constant;
-        this._terms.forEach((num, variable) => {
-            result += variable.value() * num;
+        let result = this.constant;
+        this.terms.forEach((num, variable) => {
+            result += variable.value * num;
         });
         return result;
     }
@@ -88,22 +72,22 @@ export class Expression {
         return new Expression([1 / coefficient, this]);
     }
     isConstant() {
-        return this._terms.size == 0;
+        return this.terms.size == 0;
     }
     toString() {
         let arr = [];
-        this._terms.forEach((num, variable) => {
+        this.terms.forEach((num, variable) => {
             arr.push(num + '*' + variable.toString());
         });
         let result = arr.join(' + ');
-        if (!this.isConstant() && this._constant !== 0) {
+        if (!this.isConstant() && this.constant !== 0) {
             result += ' + ';
         }
-        result += this._constant;
+        result += this.constant;
         return result;
     }
-    _terms;
-    _constant;
+    terms;
+    constant;
 }
 /**
  * An internal argument parsing function.
@@ -111,7 +95,6 @@ export class Expression {
  */
 function parseArgs(args) {
     let constant = 0.0;
-    let factory = () => 0.0;
     let terms = new Map();
     for (let i = 0, n = args.length; i < n; ++i) {
         let item = args[i];
@@ -123,9 +106,8 @@ function parseArgs(args) {
             terms.set(item, n + 1.0);
         }
         else if (item instanceof Expression) {
-            constant += item.constant();
-            let terms2 = item.terms();
-            terms2.forEach((num, variable) => {
+            constant += item.constant;
+            item.terms.forEach((num, variable) => {
                 terms.set(variable, (terms.get(variable) || 0.0) + num);
             });
         }
@@ -143,9 +125,8 @@ function parseArgs(args) {
                 terms.set(value2, n + value);
             }
             else if (value2 instanceof Expression) {
-                constant += value2.constant() * value;
-                let terms2 = value2.terms();
-                terms2.forEach((num, variable) => {
+                constant += value2.constant * value;
+                value2.terms.forEach((num, variable) => {
                     terms.set(variable, (terms.get(variable) || 0.0) + num * value);
                 });
             }
